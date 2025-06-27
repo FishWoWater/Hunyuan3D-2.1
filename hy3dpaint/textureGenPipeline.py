@@ -12,21 +12,23 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
-import os
-import torch
 import copy
-import trimesh
-import numpy as np
-from PIL import Image
-from typing import List
-from DifferentiableRenderer.MeshRender import MeshRender
-from utils.simplify_mesh_utils import remesh_mesh
-from utils.multiview_utils import multiviewDiffusionNet
-from utils.pipeline_utils import ViewProcessor
-from utils.image_super_utils import imageSuperNet
-from utils.uvwrap_utils import mesh_uv_wrap
-from DifferentiableRenderer.mesh_utils import convert_obj_to_glb
+import os
 import warnings
+from typing import List
+
+import numpy as np
+import torch
+import trimesh
+from PIL import Image
+
+from .DifferentiableRenderer.mesh_utils import convert_obj_to_glb
+from .DifferentiableRenderer.MeshRender import MeshRender
+from .utils.image_super_utils import imageSuperNet
+from .utils.multiview_utils import multiviewDiffusionNet
+from .utils.pipeline_utils import ViewProcessor
+from .utils.simplify_mesh_utils import remesh_mesh
+from .utils.uvwrap_utils import mesh_uv_wrap
 
 warnings.filterwarnings("ignore")
 from diffusers.utils import logging as diffusers_logging
@@ -69,7 +71,6 @@ class Hunyuan3DPaintConfig:
 
 
 class Hunyuan3DPaintPipeline:
-
     def __init__(self, config=None) -> None:
         self.config = config if config is not None else Hunyuan3DPaintConfig()
         self.models = {}
@@ -90,7 +91,14 @@ class Hunyuan3DPaintPipeline:
         print("Models Loaded.")
 
     @torch.no_grad()
-    def __call__(self, mesh_path=None, image_path=None, output_mesh_path=None, use_remesh=True, save_glb=True):
+    def __call__(
+        self,
+        mesh_path=None,
+        image_path=None,
+        output_mesh_path=None,
+        use_remesh=True,
+        save_glb=True,
+    ):
         """Generate texture for 3D mesh using multiview diffusion"""
         # Ensure image_prompt is a list
         if isinstance(image_path, str):
@@ -112,7 +120,7 @@ class Hunyuan3DPaintPipeline:
 
         # Output path
         if output_mesh_path is None:
-            output_mesh_path = os.path.join(path, f"textured_mesh.obj")
+            output_mesh_path = os.path.join(path, "textured_mesh.obj")
 
         # Load mesh
         mesh = trimesh.load(processed_mesh_path)
@@ -120,17 +128,21 @@ class Hunyuan3DPaintPipeline:
         self.render.load_mesh(mesh=mesh)
 
         ########### View Selection #########
-        selected_camera_elevs, selected_camera_azims, selected_view_weights = self.view_processor.bake_view_selection(
-            self.config.candidate_camera_elevs,
-            self.config.candidate_camera_azims,
-            self.config.candidate_view_weights,
-            self.config.max_selected_view_num,
+        selected_camera_elevs, selected_camera_azims, selected_view_weights = (
+            self.view_processor.bake_view_selection(
+                self.config.candidate_camera_elevs,
+                self.config.candidate_camera_azims,
+                self.config.candidate_view_weights,
+                self.config.max_selected_view_num,
+            )
         )
 
         normal_maps = self.view_processor.render_normal_multiview(
             selected_camera_elevs, selected_camera_azims, use_abs_coor=True
         )
-        position_maps = self.view_processor.render_position_multiview(selected_camera_elevs, selected_camera_azims)
+        position_maps = self.view_processor.render_position_multiview(
+            selected_camera_elevs, selected_camera_azims
+        )
 
         ##########  Style  ###########
         image_caption = "high quality"
@@ -158,21 +170,33 @@ class Hunyuan3DPaintPipeline:
         enhance_images["mr"] = copy.deepcopy(multiviews_pbr["mr"])
 
         for i in range(len(enhance_images["albedo"])):
-            enhance_images["albedo"][i] = self.models["super_model"](enhance_images["albedo"][i])
-            enhance_images["mr"][i] = self.models["super_model"](enhance_images["mr"][i])
+            enhance_images["albedo"][i] = self.models["super_model"](
+                enhance_images["albedo"][i]
+            )
+            enhance_images["mr"][i] = self.models["super_model"](
+                enhance_images["mr"][i]
+            )
 
         ###########  Bake  ##########
         for i in range(len(enhance_images)):
             enhance_images["albedo"][i] = enhance_images["albedo"][i].resize(
                 (self.config.render_size, self.config.render_size)
             )
-            enhance_images["mr"][i] = enhance_images["mr"][i].resize((self.config.render_size, self.config.render_size))
+            enhance_images["mr"][i] = enhance_images["mr"][i].resize(
+                (self.config.render_size, self.config.render_size)
+            )
         texture, mask = self.view_processor.bake_from_multiview(
-            enhance_images["albedo"], selected_camera_elevs, selected_camera_azims, selected_view_weights
+            enhance_images["albedo"],
+            selected_camera_elevs,
+            selected_camera_azims,
+            selected_view_weights,
         )
         mask_np = (mask.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
         texture_mr, mask_mr = self.view_processor.bake_from_multiview(
-            enhance_images["mr"], selected_camera_elevs, selected_camera_azims, selected_view_weights
+            enhance_images["mr"],
+            selected_camera_elevs,
+            selected_camera_azims,
+            selected_view_weights,
         )
         mask_mr_np = (mask_mr.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
 
@@ -185,8 +209,12 @@ class Hunyuan3DPaintPipeline:
 
         self.render.save_mesh(output_mesh_path, downsample=True)
 
+        print(f"save the mesh to {output_mesh_path}")
+
         if save_glb:
-            convert_obj_to_glb(output_mesh_path, output_mesh_path.replace(".obj", ".glb"))
+            convert_obj_to_glb(
+                output_mesh_path, output_mesh_path.replace(".obj", ".glb")
+            )
             output_glb_path = output_mesh_path.replace(".obj", ".glb")
 
         return output_mesh_path

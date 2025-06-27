@@ -12,13 +12,14 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
-import os
-import cv2
-import bpy
 import math
-import numpy as np
+import os
 from io import StringIO
-from typing import Optional, Tuple, Dict, Any
+from typing import Any, Dict, Optional, Tuple
+
+import bpy
+import cv2
+import numpy as np
 
 
 def _safe_extract_attribute(obj: Any, attr_path: str, default: Any = None) -> Any:
@@ -95,7 +96,11 @@ def _write_mtl_properties(f, properties: Dict[str, Any]):
 
 
 def _create_obj_content(
-    vtx_pos: np.ndarray, vtx_uv: np.ndarray, pos_idx: np.ndarray, uv_idx: np.ndarray, name: str
+    vtx_pos: np.ndarray,
+    vtx_uv: np.ndarray,
+    pos_idx: np.ndarray,
+    uv_idx: np.ndarray,
+    name: str,
 ) -> str:
     """Create OBJ file content."""
     buffer = StringIO()
@@ -117,7 +122,17 @@ def _create_obj_content(
     return buffer.getvalue()
 
 
-def save_obj_mesh(mesh_path, vtx_pos, pos_idx, vtx_uv, uv_idx, texture, metallic=None, roughness=None, normal=None):
+def save_obj_mesh(
+    mesh_path,
+    vtx_pos,
+    pos_idx,
+    vtx_uv,
+    uv_idx,
+    texture,
+    metallic=None,
+    roughness=None,
+    normal=None,
+):
     """Save mesh as OBJ file with textures and material."""
     # Convert inputs to numpy arrays
     vtx_pos = _convert_to_numpy(vtx_pos, np.float32)
@@ -137,7 +152,9 @@ def save_obj_mesh(mesh_path, vtx_pos, pos_idx, vtx_uv, uv_idx, texture, metallic
     texture_maps["diffuse"] = _save_texture_map(texture, base_path)
 
     if metallic is not None:
-        texture_maps["metallic"] = _save_texture_map(metallic, base_path, "_metallic", color_convert=cv2.COLOR_RGB2GRAY)
+        texture_maps["metallic"] = _save_texture_map(
+            metallic, base_path, "_metallic", color_convert=cv2.COLOR_RGB2GRAY
+        )
     if roughness is not None:
         texture_maps["roughness"] = _save_texture_map(
             roughness, base_path, "_roughness", color_convert=cv2.COLOR_RGB2GRAY
@@ -160,16 +177,20 @@ def _create_mtl_file(base_path: str, texture_maps: Dict[str, str], is_pbr: bool)
             # PBR material properties
             properties = {
                 "Kd": [0.800, 0.800, 0.800],
-                "Ke": [0.000, 0.000, 0.000],  # 鐜鍏夐伄钄�
-                "Ni": 1.500,  # 鎶樺皠绯绘暟
-                "d": 1.0,  # 閫忔槑搴�
-                "illum": 2,  # 鍏夌収妯″瀷
+                "Ke": [0.000, 0.000, 0.000],
+                "Ni": 1.500,
+                "d": 1.0,
+                "illum": 2,
                 "map_Kd": texture_maps["diffuse"],
             }
             _write_mtl_properties(f, properties)
 
             # Additional PBR maps
-            map_configs = [("metallic", "map_Pm"), ("roughness", "map_Pr"), ("normal", "map_Bump -bm 1.0")]
+            map_configs = [
+                ("metallic", "map_Pm"),
+                ("roughness", "map_Pr"),
+                ("normal", "map_Bump -bm 1.0"),
+            ]
 
             for texture_key, mtl_key in map_configs:
                 if texture_key in texture_maps:
@@ -190,10 +211,28 @@ def _create_mtl_file(base_path: str, texture_maps: Dict[str, str], is_pbr: bool)
             _write_mtl_properties(f, properties)
 
 
-def save_mesh(mesh_path, vtx_pos, pos_idx, vtx_uv, uv_idx, texture, metallic=None, roughness=None, normal=None):
+def save_mesh(
+    mesh_path,
+    vtx_pos,
+    pos_idx,
+    vtx_uv,
+    uv_idx,
+    texture,
+    metallic=None,
+    roughness=None,
+    normal=None,
+):
     """Save mesh using OBJ format."""
     save_obj_mesh(
-        mesh_path, vtx_pos, pos_idx, vtx_uv, uv_idx, texture, metallic=metallic, roughness=roughness, normal=normal
+        mesh_path,
+        vtx_pos,
+        pos_idx,
+        vtx_uv,
+        uv_idx,
+        texture,
+        metallic=metallic,
+        roughness=roughness,
+        normal=normal,
     )
 
 
@@ -280,5 +319,6 @@ def convert_obj_to_glb(
         # Export to GLB
         bpy.ops.export_scene.gltf(filepath=glb_path, use_active_scene=True)
         return True
-    except Exception:
+    except Exception as e:
+        print(f"Error converting OBJ to GLB: {e}")
         return False
