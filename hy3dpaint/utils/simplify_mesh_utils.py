@@ -12,8 +12,8 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
-import trimesh
 import pymeshlab
+import trimesh
 
 
 def remesh_mesh(mesh_path, remesh_path):
@@ -33,5 +33,6 @@ def mesh_simplify_trimesh(inputpath, outputpath, target_count=40000):
     face_num = courent.faces.shape[0]
 
     if face_num > target_count:
-        courent = courent.simplify_quadric_decimation(target_count)
+        # for trimesh 4.6+, specify the face count explicitly
+        courent = courent.simplify_quadric_decimation(face_count=target_count)
     courent.export(outputpath)

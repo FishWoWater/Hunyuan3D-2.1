@@ -46,21 +46,22 @@ def reduce_face(mesh: pymeshlab.MeshSet, max_facenum: int = 200000):
         boundaryweight=3,
         preservenormal=True,
         preservetopology=True,
-        autoclean=True
+        autoclean=True,
     )
     return mesh
 
 
 def remove_floater(mesh: pymeshlab.MeshSet):
-    mesh.apply_filter("compute_selection_by_small_disconnected_components_per_face",
-                      nbfaceratio=0.005)
+    mesh.apply_filter(
+        "compute_selection_by_small_disconnected_components_per_face", nbfaceratio=0.005
+    )
     mesh.apply_filter("compute_selection_transfer_face_to_vertex", inclusive=False)
     mesh.apply_filter("meshing_remove_selected_vertices_and_faces")
     return mesh
 
 
 def pymeshlab2trimesh(mesh: pymeshlab.MeshSet):
-    with tempfile.NamedTemporaryFile(suffix='.ply', delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(suffix=".ply", delete=False) as temp_file:
         mesh.save_current_mesh(temp_file.name)
         mesh = trimesh.load(temp_file.name)
     # 检查加载的对象类型
@@ -74,7 +75,7 @@ def pymeshlab2trimesh(mesh: pymeshlab.MeshSet):
 
 
 def trimesh2pymeshlab(mesh: trimesh.Trimesh):
-    with tempfile.NamedTemporaryFile(suffix='.ply', delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(suffix=".ply", delete=False) as temp_file:
         if isinstance(mesh, trimesh.scene.Scene):
             for idx, obj in enumerate(mesh.geometry.values()):
                 if idx == 0:
@@ -101,12 +102,16 @@ def export_mesh(input, output):
     return mesh
 
 
-def import_mesh(mesh: Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutput, str]) -> pymeshlab.MeshSet:
+def import_mesh(
+    mesh: Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutput, str],
+) -> pymeshlab.MeshSet:
     if isinstance(mesh, str):
         mesh = load_mesh(mesh)
     elif isinstance(mesh, Latent2MeshOutput):
         mesh = pymeshlab.MeshSet()
-        mesh_pymeshlab = pymeshlab.Mesh(vertex_matrix=mesh.mesh_v, face_matrix=mesh.mesh_f)
+        mesh_pymeshlab = pymeshlab.Mesh(
+            vertex_matrix=mesh.mesh_v, face_matrix=mesh.mesh_f
+        )
         mesh.add_mesh(mesh_pymeshlab, "converted_mesh")
 
     if isinstance(mesh, (trimesh.Trimesh, trimesh.scene.Scene)):
@@ -116,11 +121,11 @@ def import_mesh(mesh: Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutpu
 
 
 class FaceReducer:
-    @synchronize_timer('FaceReducer')
+    @synchronize_timer("FaceReducer")
     def __call__(
         self,
         mesh: Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutput, str],
-        max_facenum: int = 40000
+        max_facenum: int = 40000,
     ) -> Union[pymeshlab.MeshSet, trimesh.Trimesh]:
         ms = import_mesh(mesh)
         ms = reduce_face(ms, max_facenum=max_facenum)
@@ -129,7 +134,7 @@ class FaceReducer:
 
 
 class FloaterRemover:
-    @synchronize_timer('FloaterRemover')
+    @synchronize_timer("FloaterRemover")
     def __call__(
         self,
         mesh: Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutput, str],
@@ -141,14 +146,14 @@ class FloaterRemover:
 
 
 class DegenerateFaceRemover:
-    @synchronize_timer('DegenerateFaceRemover')
+    @synchronize_timer("DegenerateFaceRemover")
     def __call__(
         self,
         mesh: Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutput, str],
     ) -> Union[pymeshlab.MeshSet, trimesh.Trimesh, Latent2MeshOutput]:
         ms = import_mesh(mesh)
 
-        with tempfile.NamedTemporaryFile(suffix='.ply', delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(suffix=".ply", delete=False) as temp_file:
             ms.save_current_mesh(temp_file.name)
             ms = pymeshlab.MeshSet()
             ms.load_new_mesh(temp_file.name)
@@ -168,7 +173,10 @@ def mesh_normalize(mesh):
 
     center = (max_bb + min_bb) / 2
 
-    scale = torch.norm(torch.tensor(vtx_pos - center, dtype=torch.float32), dim=1).max() * 2.0
+    scale = (
+        torch.norm(torch.tensor(vtx_pos - center, dtype=torch.float32), dim=1).max()
+        * 2.0
+    )
 
     vtx_pos = (vtx_pos - center) * (scale_factor / float(scale))
     mesh.vertices = vtx_pos
@@ -183,15 +191,17 @@ class MeshSimplifier:
             executable = os.path.join(CURRENT_DIR, "mesh_simplifier.bin")
         self.executable = executable
 
-    @synchronize_timer('MeshSimplifier')
+    @synchronize_timer("MeshSimplifier")
     def __call__(
         self,
         mesh: Union[trimesh.Trimesh],
     ) -> Union[trimesh.Trimesh]:
-        with tempfile.NamedTemporaryFile(suffix='.obj', delete=False) as temp_input:
-            with tempfile.NamedTemporaryFile(suffix='.obj', delete=False) as temp_output:
+        with tempfile.NamedTemporaryFile(suffix=".obj", delete=False) as temp_input:
+            with tempfile.NamedTemporaryFile(
+                suffix=".obj", delete=False
+            ) as temp_output:
                 mesh.export(temp_input.name)
-                os.system(f'{self.executable} {temp_input.name} {temp_output.name}')
+                os.system(f"{self.executable} {temp_input.name} {temp_output.name}")
                 ms = trimesh.load(temp_output.name, process=False)
                 if isinstance(ms, trimesh.Scene):
                     combined_mesh = trimesh.Trimesh()
